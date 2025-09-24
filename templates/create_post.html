@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create New Post</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">Your Posts</div>
+            <div class="tagline">Share your thoughts with the world</div>
+        </header>
+        
+        <div class="content">
+            <div class="card">
+                <div class="card-header">
+                    Create a New Post
+                </div>
+                <div class="card-body">
+                    <div id="error-message" class="error-message"></div>
+                    
+                    <div class="form-group">
+                        <textarea id="content" rows="15" cols="80" placeholder="What's on your mind today? Share your thoughts..."></textarea>
+                        <div class="character-count"><span id="char-count">0</span> characters</div>
+                    </div>
+                    
+                    <div id="post-preview" class="post-preview">
+                        <div class="post-preview-heading">Post Preview</div>
+                        <div id="preview-content"></div>
+                    </div>                    
+                    
+                    <div class="button-group">
+                        <button type="button" id="preview-post" class="button-pink">Preview</button>
+                        <button type="button" id="submit-post" class="button-pink button-highlight button-large">Share Post</button>
+                        <a href="/posts/user" class="button-pink" style="text-decoration: none;">Cancel</a>
+                        <a href="/users/profile" class="button-pink" style="text-decoration: none;">Back to Profile</a>
+                        <a href="/posts/discover" class="button-pink" style="text-decoration: none;">Discover</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const submitBtn = document.getElementById('submit-post');
+            const previewBtn = document.getElementById('preview-post');
+            const contentInput = document.getElementById('content');
+            const errorMessage = document.getElementById('error-message');
+            const charCount = document.getElementById('char-count');
+            const postPreview = document.getElementById('post-preview');
+            const previewContent = document.getElementById('preview-content');
+            
+            // Update character count
+            contentInput.addEventListener('input', function() {
+                const count = this.value.length;
+                charCount.textContent = count;
+                
+                // Clear error when user starts typing
+                if (count > 0) {
+                    errorMessage.textContent = '';
+                }
+            });
+            
+            // Preview functionality
+            previewBtn.addEventListener('click', function() {
+                const content = contentInput.value.trim();
+                
+                if (!content) {
+                    errorMessage.textContent = 'Please write something to preview';
+                    return;
+                }
+                
+                previewContent.textContent = content;
+                postPreview.style.display = 'block';
+                
+                // Scroll to preview
+                postPreview.scrollIntoView({ behavior: 'smooth' });
+            });
+            
+            submitBtn.addEventListener('click', async function() {
+                const content = contentInput.value.trim();
+                
+                // Clear previous error message
+                errorMessage.textContent = '';
+                
+                if (!content) {
+                    errorMessage.textContent = 'Post content is required';
+                    contentInput.focus();
+                    return;
+                }
+                
+                try {
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Posting...';
+                    
+                    const response = await fetch('/posts/api/create', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                        },
+                        body: JSON.stringify({ content })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        // Redirect to user posts page on success
+                        window.location.href = '/posts/user';
+                    } else {
+                        errorMessage.textContent = data.error || 'Failed to create post';
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = 'Share Post';
+                    }
+                } catch (error) {
+                    console.error('Error creating post:', error);
+                    errorMessage.textContent = 'An error occurred. Please try again.';
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Share Post';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

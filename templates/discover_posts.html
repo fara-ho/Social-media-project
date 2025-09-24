@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discover Posts</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Discover Posts</h1>
+        </header>
+
+        <div class="posts-nav">
+            <a href="/posts/user" class="button">My Posts</a>
+            <a href="/posts/create" class="button">Create Post</a>
+            <a href="/users/profile" class="button">Back to Profile</a>
+        </div>
+        
+        <!-- Stats Summary (Hidden by default) -->
+        <div id="stats-summary" class="stats-summary" style="display: none;">
+            <div class="stat-card">
+                <div class="value" id="total-posts">0</div>
+                <div class="label">Total Posts</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="total-likes">0</div>
+                <div class="label">Total Likes</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="total-comments">0</div>
+                <div class="label">Total Comments</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="avg-likes">0</div>
+                <div class="label">Avg Likes/Post</div>
+            </div>
+        </div>
+        
+        <!-- Toggle Filters Button -->
+        <button class="toggle-filters" id="toggle-filters">
+            <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M6 10.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5zm-2-3a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5zm-2-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z"/>
+            </svg>
+            Show Filters
+        </button>
+        
+        <!-- Filters Section (Hidden by default) -->
+        <div id="filters-section" class="filters-section" style="display: none;">
+            <h3>Filter Posts</h3>
+            <div class="filter-row">
+                <div class="filter-item">
+                    <label for="date-from">From Date</label>
+                    <input type="date" id="date-from">
+                </div>
+                <div class="filter-item">
+                    <label for="date-to">To Date</label>
+                    <input type="date" id="date-to">
+                </div>
+            </div>
+            <div class="filter-row">
+                <div class="filter-item">
+                    <label for="min-likes">Minimum Likes</label>
+                    <input type="number" id="min-likes" min="0" placeholder="0">
+                </div>
+                <div class="filter-item">
+                    <label for="author">Author Username</label>
+                    <input type="text" id="author" placeholder="Search by username">
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button class="reset-filters" id="reset-filters">Reset</button>
+                <button class="apply-filters" id="apply-filters">Apply Filters</button>
+            </div>
+        </div>
+        
+        <!-- Posts Display Tabs -->
+        <div class="tabs">
+            <div class="tab active" data-tab="recent">Recent Posts</div>
+            <div class="tab" data-tab="top">Top Posts</div>
+        </div>
+        
+        <!-- Main Posts Container -->
+        <div id="posts-container" class="posts-container">
+            <div class="loading">Loading posts...</div>
+        </div>
+        
+        <!-- Top Posts Container (Hidden by default) -->
+        <div id="top-posts-container" class="posts-container" style="display: none;">
+            <div class="loading">Loading top posts...</div>
+        </div>
+        
+        <!-- Engagement Chart Container (Hidden by default) -->
+        <div id="engagement-chart" style="display: none; height: 400px; margin-bottom: 30px;">
+            <div class="loading">Loading engagement data...</div>
+        </div>
+        
+        <div id="error-message" class="error-message"></div>
+    </div>
+
+    <!-- User Profile Modal -->
+    <div id="user-profile-modal" class="user-profile-modal">
+        <div class="modal-content">
+            <span class="close-modal" id="close-modal">&times;</span>
+            <h2 id="profile-username"></h2>
+            <p id="profile-name"></p>
+            
+            <div class="profile-stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="posts-count">0</div>
+                    <div class="stat-label">Posts</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="followers-count">0</div>
+                    <div class="stat-label">Followers</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="following-count">0</div>
+                    <div class="stat-label">Following</div>
+                </div>
+            </div>
+            
+            <button id="follow-button" class="follow-btn">Follow</button>
+
+            <div id="follow-error" class="text-red-500 text-sm mt-2"></div>
+            
+            <div class="user-posts" id="user-posts">
+                <h3>Recent Posts</h3>
+                <div id="profile-posts-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const postsContainer = document.getElementById('posts-container');
+            const topPostsContainer = document.getElementById('top-posts-container');
+            const engagementChart = document.getElementById('engagement-chart');
+            const errorMessage = document.getElementById('error-message');
+            const userProfileModal = document.getElementById('user-profile-modal');
+            const closeModal = document.getElementById('close-modal');
+            const followButton = document.getElementById('follow-button');
+            const currentUserId = localStorage.getItem('user_id');
+
+            if (!localStorage.getItem('access_token')) {
+                console.error('No access token found');
+                errorMessage.textContent = 'Please log in again. Your session may have expired.';
+                // window.location.href = '/login';
+            }
+
+            // Tabs Functionality
+            const tabs = document.querySelectorAll('.tab');
+            let activeTab = 'recent';
+            
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    // Update active tab
+                    tabs.forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // Set active tab
+                    activeTab = this.dataset.tab;
+                    
+                    // Show/hide relevant containers
+                    if (activeTab === 'recent') {
+                        postsContainer.style.display = 'block';
+                        topPostsContainer.style.display = 'none';
+                        engagementChart.style.display = 'none';
+                    } else if (activeTab === 'top') {
+                        postsContainer.style.display = 'none';
+                        topPostsContainer.style.display = 'block';
+                        engagementChart.style.display = 'none';
+                        fetchTopPosts();
+                    } else if (activeTab === 'engagement') {
+                        postsContainer.style.display = 'none';
+                        topPostsContainer.style.display = 'none';
+                        engagementChart.style.display = 'block';
+                        fetchEngagementData();
+                    }
+                });
+            });
+            
+            // Toggle filters section
+            const toggleFilters = document.getElementById('toggle-filters');
+            const filtersSection = document.getElementById('filters-section');
+            
+            toggleFilters.addEventListener('click', function() {
+                if (filtersSection.style.display === 'none') {
+                    filtersSection.style.display = 'block';
+                    this.innerHTML = `
+                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M7.646 4.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1-.708.708L8 5.707l-5.646 5.647a.5.5 0 0 1-.708-.708l6-6z"/>
+                        </svg>
+                        Hide Filters
+                    `;
+                } else {
+                    filtersSection.style.display = 'none';
+                    this.innerHTML = `
+                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M6 10.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5zm-2-3a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5zm-2-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z"/>
+                        </svg>
+                        Show Filters
+                    `;
+                }
+            });
+            
+            // Apply and reset filters
+            const applyFilters = document.getElementById('apply-filters');
+            const resetFilters = document.getElementById('reset-filters');
+            
+            applyFilters.addEventListener('click', function() {
+                fetchDiscoverPosts();
+            });
+            
+            resetFilters.addEventListener('click', function() {
+                document.getElementById('date-from').value = '';
+                document.getElementById('date-to').value = '';
+                document.getElementById('min-likes').value = '';
+                document.getElementById('author').value = '';
+                fetchDiscoverPosts();
+            });
+            
+            // Close modal when clicking the X
+            closeModal.addEventListener('click', function() {
+                userProfileModal.style.display = 'none';
+            });
+            
+            // Close modal when clicking outside of it
+            window.addEventListener('click', function(event) {
+                if (event.target === userProfileModal) {
+                    userProfileModal.style.display = 'none';
+                }
+            });
+            
+            // Fetch statistics
+            async function fetchPostStats() {
+                try {
+                    const response = await fetch('/posts/api/stats', {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                        }
+                    });
+
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        // Update stats UI
+                        document.getElementById('total-posts').textContent = data.total_posts;
+                        document.getElementById('total-likes').textContent = data.total_likes;
+                        document.getElementById('total-comments').textContent = data.total_comments;
+                        document.getElementById('avg-likes').textContent = parseFloat(data.average_likes_per_post).toFixed(1);
+                        
+                        // Show stats summary
+                        document.getElementById('stats-summary').style.display = 'flex';
+                    }
+                } catch (error) {
+                    console.error('Error fetching stats:', error);
+                }
+            }
+            
+            // Fetch post engagement chart data
+            async function fetchEngagementData() {
+                try {
+                    engagementChart.innerHTML = '<div class="loading">Loading engagement data...</div>';
+                    
+                    const response = await fetch('/posts/api/engagement-by-date', {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                        }
+                    });
+
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        displayEngagementChart(data.engagement_by_date);
+                    } else {
+                        engagementChart.innerHTML = '<div class="error-message">Failed to load engagement data</div>';
+                    }
+                } catch (error) {
+                    console.error('Error fetching engagement data:', error);
+                    engagementChart.innerHTML = '<div class="error-message">An error occurred. Please try again.</div>';
+                }
+            }
+            
+            // Display engagement chart
+            function displayEngagementChart(engagementData) {
+                // Clear container
+                engagementChart.innerHTML = '<canvas id="engagement-canvas"></canvas>';
+                
+                if (engagementData.length === 0) {
+                    engagementChart.innerHTML = '<div class="no-data">No engagement data available.</div>';
+                    return;
+                }
+                
+                // Sort data by date
+                engagementData.sort((a, b) => new Date(a.date) - new Date(b.date));
+                
+                // Format dates for display
+                const dates = engagementData.map(item => {
+                    const date = new Date(item.date);
+                    return date.toLocaleDateString();
+                });
+                
+                const postsCount = engagementData.map(item => item.posts_count);
+                const likesCount = engagementData.map(item => item.likes_count);
+                const commentsCount = engagementData.map(item => item.comments_count);
+                
+                const ctx = document.getElementById('engagement-canvas').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: dates,
+                        datasets: [
+                            {
+                                label: 'Posts',
+                                data: postsCount,
+                                borderColor: '#4a76a8',
+                                backgroundColor: 'rgba(74, 118, 168, 0.1)',
+                                tension: 0.1,
+                                fill: true
+                            },
+                            {
+                                label: 'Likes',
+                                data: likesCount,
+                                borderColor: '#e74c3c',
+                                backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                                tension: 0.1,
+                                fill: true
+                            },
+                            {
+                                label: 'Comments',
+                                data: commentsCount,
+                                borderColor: '#2ecc71',
+                                backgroundColor: 'rgba(46, 204, 113, 0.1)',
+                                tension: 0.1,
+                                fill: true
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Engagement Over Time',
+                                font: {
+                                    size: 16
+                                }
+                            },
+                            legend: {
+                                position: 'bottom'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Count'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Date'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Fetch top posts
+            async function fetchTopPosts() {
+                try {
+                    topPostsContainer.innerHTML = '<div class="loading">Loading top posts...</div>';
+                    
+                    const response = await fetch('/posts/api/top-posts', {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                        }
+                    });
+
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        displayTopPosts(data.top_posts);
+                    } else {
+                        errorMessage.textContent = data.error || 'Failed to fetch top posts';
+                        topPostsContainer.innerHTML = '';
+                    }
+                } catch (error) {
+                    console.error('Error fetching top posts:', error);
+                    errorMessage.textContent = 'An error occurred. Please try again.';
+                    topPostsContainer.innerHTML = '';
+                }
+            }
+            
+            // Display top posts
+            function displayTopPosts(posts) {
+                topPostsContainer.innerHTML = '';
+                
+                if (posts.length === 0) {
+                    topPostsContainer.innerHTML = '<div class="no-posts">No top posts found.</div>';
+                    return;
+                }
+                
+                posts.forEach((post, index) => {
+                    const postDate = new Date(post.created_at);
+                    const formattedDate = postDate.toLocaleDateString() + ' ' + postDate.toLocaleTimeString();
+                    
+                    const postElement = document.createElement('div');
+                    postElement.className = 'post-card';
+                    
+                    postElement.innerHTML = `
+                        <div class="post-header">
+                            <div class="post-author" data-user-id="${post.author.user_id}" data-username="${post.author.username}" data-name="${post.author.name}">
+                                ${post.author.name} (@${post.author.username})
+                            </div>
+                            <div class="post-date">${formattedDate}</div>
+                        </div>
+                        <div class="post-content">${post.content}</div>
+                        <div class="post-stats">
+                            <div class="stat">
+                                <span class="stat-label">❤️ Likes:</span>
+                                <span class="stat-value">${post.likes_count}</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">💬 Comments:</span>
+                                <span class="stat-value">${post.comments_count}</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">✨ Engagement Score:</span>
+                                <span class="stat-value">${post.engagement_score}</span>
+                            </div>
+                        </div>
+                    `;
+                    
+                    topPostsContainer.appendChild(postElement);
+                    
+                    // Add rank indicator
+                    const rankBadge = document.createElement('div');
+                    rankBadge.className = 'rank-badge';
+                    rankBadge.textContent = `#${index + 1}`;
+                    rankBadge.style.position = 'absolute';
+                    rankBadge.style.top = '10px';
+                    rankBadge.style.right = '10px';
+                    rankBadge.style.backgroundColor = index === 0 ? '#ffd700' : index === 1 ? '#c0c0c0' : index === 2 ? '#cd7f32' : '#7f8c8d';
+                    rankBadge.style.color = '#fff';
+                    rankBadge.style.padding = '5px 10px';
+                    rankBadge.style.borderRadius = '15px';
+                    rankBadge.style.fontWeight = 'bold';
+                    postElement.style.position = 'relative';
+                    
+                    postElement.appendChild(rankBadge);
+                });
+                
+                // Add event listeners for author profiles
+                document.querySelectorAll('#top-posts-container .post-author').forEach(author => {
+                    author.addEventListener('click', function() {
+                        const userId = this.dataset.userId;
+                        const username = this.dataset.username;
+                        const name = this.dataset.name;
+                        
+                        showUserProfile(userId, username, name);
+                    });
+                });
+            }
+            
+            async function fetchDiscoverPosts() {
+                try {
+                    postsContainer.innerHTML = '<div class="loading">Loading posts...</div>';
+                    
+                    // Get filter values
+                    const dateFrom = document.getElementById('date-from').value;
+                    const dateTo = document.getElementById('date-to').value;
+                    const minLikes = document.getElementById('min-likes').value;
+                    const author = document.getElementById('author').value;
+                    
+                    // Build query parameters
+                    let queryParams = [];
+                    if (dateFrom) queryParams.push(`date_from=${dateFrom}`);
+                    if (dateTo) queryParams.push(`date_to=${dateTo}`);
+                    if (minLikes) queryParams.push(`min_likes=${minLikes}`);
+                    if (author) queryParams.push(`author=${encodeURIComponent(author)}`);
+                    
+                    const queryString = queryParams.length > 0 ? '?' + queryParams.join('&') : '';
+                    
+                    const response = await fetch(`/posts/api/discover${queryString}`, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                        }
+                    });
+
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        displayPosts(data.posts);
+                    } else {
+                        errorMessage.textContent = data.error || 'Failed to fetch posts';
+                        postsContainer.innerHTML = '';
+                    }
+                } catch (error) {
+                    console.error('Error fetching posts:', error);
+                    errorMessage.textContent = 'An error occurred. Please try again.';
+                    postsContainer.innerHTML = '';
+                }
+            }
+            
+            async function likePost(postId, likeButton) {
+                // Disable the button temporarily to prevent multiple rapid clicks
+                likeButton.classList.add('processing');
+                
+                try {
+                    const response = await fetch(`/posts/${postId}/like`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                        }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        // Toggle like status visually
+                        const likeCountElement = likeButton.querySelector('.like-count');
+                        
+                        if (data.liked) {
+                            likeButton.classList.add('like-active');
+                            likeCountElement.textContent = parseInt(likeCountElement.textContent) + 1;
+                        } else {
+                            likeButton.classList.remove('like-active');
+                            likeCountElement.textContent = parseInt(likeCountElement.textContent) - 1;
+                        }
+                    } else {
+                        console.error('Error liking post:', data.error);
+                    }
+                } catch (error) {
+                    console.error('Error liking post:', error);
+                } finally {
+                    // Re-enable the button after the request completes
+                    setTimeout(() => {
+                        likeButton.classList.remove('processing');
+                    }, 500); // Half-second delay to prevent rapid re-clicking
+                }
+            }
+            
+            async function loadComments(postId, commentsContainer) {
+                try {
+                    commentsContainer.innerHTML = '<div class="loading">Loading comments...</div>';
+                    commentsContainer.innerHTML = '';
+                } catch (error) {
+                    console.error('Error loading comments:', error);
+                    commentsContainer.innerHTML = '<div class="error-message">Failed to load comments</div>';
+                }
+            }
+            
+            async function addComment(postId, content, commentsContainer) {
+                try {
+                    const response = await fetch(`/posts/${postId}/comments`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ content })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        // Add the new comment to the UI
+                        const commentElement = document.createElement('div');
+                        commentElement.className = 'comment';
+                        
+                        const comment = data.comment;
+                        commentElement.innerHTML = `
+                            <span class="comment-author">${comment.author.username}</span>
+                            <span class="comment-content">${comment.content}</span>
+                        `;
+                        
+                        commentsContainer.appendChild(commentElement);
+                        return true;
+                    } else {
+                        console.error('Error adding comment:', data.error);
+                        return false;
+                    }
+                } catch (error) {
+                    console.error('Error adding comment:', error);
+                    return false;
+                }
+            }
+            
+            async function fetchUserProfile(userId) {
+                try {
+                    // Get user profile info - this already includes counts for posts, likes, comments, followers, following
+                    const userResponse = await fetch(`/users/${userId}/profile`, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                        }
+                    });
+                    
+                    if (!userResponse.ok) {
+                        throw new Error('Failed to fetch user profile');
+                    }
+                    
+                    const userData = await userResponse.json();
+                    
+                    // Get follow status
+                    const followResponse = await fetch(`/users/${userId}/follow/status`, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                        }
+                    });
+                    
+                    if (!followResponse.ok) {
+                        throw new Error('Failed to fetch follow status');
+                    }
+                    
+                    const followStatus = await followResponse.json();
+                    
+                    // Get user posts
+                    const postsResponse = await fetch(`/users/${userId}/posts`, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                        }
+                    });
+                    
+                    if (!postsResponse.ok) {
+                        throw new Error('Failed to fetch user posts');
+                    }
+                    
+                    const postsData = await postsResponse.json();
+                    
+                    return {
+                        user: {
+                            user_id: userData.user_id,
+                            username: userData.username,
+                            name: userData.name,
+                            posts_count: userData.posts_count,
+                            followers_count: userData.followers_count,
+                            following_count: userData.following_count,
+                            total_likes_received: userData.total_likes_received,
+                            total_comments_received: userData.total_comments_received
+                        },
+                        isFollowing: followStatus.is_following,
+                        posts: postsData.posts || []
+                    };
+                    
+                } catch (error) {
+                    console.error('Error fetching user profile:', error);
+                    return null;
+                }
+            }
+            
+            async function toggleFollow(userId) {
+                try {
+                    const response = await fetch(`/users/${userId}/follow`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                        }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        // After toggling, get the updated follow status
+                        const statusResponse = await fetch(`/users/${userId}/follow/status`, {
+                            method: 'GET',
+                            headers: {
+                                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                            }
+                        });
+                        
+                        const statusData = await statusResponse.json();
+                        return statusData.is_following;
+                    } else {
+                        console.error('Error following/unfollowing:', data.error);
+                        document.getElementById('follow-error').textContent = data.error;
+                        setTimeout(() => {
+                            document.getElementById('follow-error').textContent = '';
+                        }, 2000);
+                        return null;
+                    }
+                } catch (error) {
+                    console.error('Error following/unfollowing:', error);
+                    return null;
+                }
+            }
+            
+            async function showUserProfile(userId, username, name) {
+                document.getElementById('profile-username').textContent = '@' + username;
+                document.getElementById('profile-name').textContent = name;
+                
+                // Set loading state
+                document.getElementById('posts-count').textContent = '...';
+                document.getElementById('followers-count').textContent = '...';
+                document.getElementById('following-count').textContent = '...';
+                
+                // Clear previous posts
+                document.getElementById('profile-posts-container').innerHTML = '<div class="loading">Loading user data...</div>';
+                
+                // Show the modal
+                userProfileModal.style.display = 'block';
+                
+                // Fetch actual profile data
+                const profileData = await fetchUserProfile(userId);
+                
+                if (profileData) {
+                    // Update profile stats
+                    document.getElementById('posts-count').textContent = profileData.user.posts_count;
+                    document.getElementById('followers-count').textContent = profileData.user.followers_count;
+                    document.getElementById('following-count').textContent = profileData.user.following_count;
+                    
+                    // Update follow button based on current user vs profile user
+                    if (userId === currentUserId) {
+                        followButton.style.display = 'none';
+                    } else {
+                        followButton.style.display = 'block';
+                        
+                        if (profileData.isFollowing) {
+                            followButton.textContent = 'Following';
+                            followButton.classList.add('following-btn');
+                        } else {
+                            followButton.textContent = 'Follow';
+                            followButton.classList.remove('following-btn');
+                        }
+                        
+                        // Set up follow button action
+                        followButton.onclick = async function() {
+                            const isNowFollowing = await toggleFollow(userId);
+                            
+                            if (isNowFollowing !== null) {
+                                if (isNowFollowing) {
+                                    followButton.textContent = 'Following';
+                                    followButton.classList.add('following-btn');
+                                    document.getElementById('followers-count').textContent = 
+                                        parseInt(document.getElementById('followers-count').textContent) + 1;
+                                } else {
+                                    followButton.textContent = 'Follow';
+                                    followButton.classList.remove('following-btn');
+                                    document.getElementById('followers-count').textContent = 
+                                        parseInt(document.getElementById('followers-count').textContent) - 1;
+                                }
+                            }
+                        };
+                    }
+                    
+                    // Display user posts
+                    const postsContainer = document.getElementById('profile-posts-container');
+                    postsContainer.innerHTML = '';
+                    
+                    if (profileData.posts.length === 0) {
+                        postsContainer.innerHTML = '<div class="no-posts">No posts yet.</div>';
+                    } else {
+                        profileData.posts.forEach(post => {
+                            const postDate = new Date(post.created_at);
+                            const formattedDate = postDate.toLocaleDateString();
+                            
+                            const postElement = document.createElement('div');
+                            postElement.className = 'post-card';
+                            postElement.innerHTML = `
+                                <div class="post-content">${post.content}</div>
+                                <div class="post-date">${formattedDate}</div>
+                                <div class="post-likes">❤️ ${post.likes_count || 0}</div>
+                            `;
+                            postsContainer.appendChild(postElement);
+                        });
+                    }
+                } else {
+                    document.getElementById('profile-posts-container').innerHTML = 
+                        '<div class="error-message">Failed to load profile data</div>';
+                }
+            }
+            
+            function displayPosts(posts) {
+                postsContainer.innerHTML = '';
+                
+                if (posts.length === 0) {
+                    postsContainer.innerHTML = '<div class="no-posts">No posts found.</div>';
+                    return;
+                }
+                
+                posts.forEach(post => {
+                    const postDate = new Date(post.created_at);
+                    const formattedDate = postDate.toLocaleDateString() + ' ' + postDate.toLocaleTimeString();
+                    
+                    const postElement = document.createElement('div');
+                    postElement.className = 'post-card';
+                    postElement.dataset.postId = post.post_id;
+                    
+                    // Check if user has liked this post
+                    const likeActiveClass = post.user_liked ? 'like-active' : '';
+                    
+                    postElement.innerHTML = `
+                        <div class="post-header">
+                            <div class="post-author" data-user-id="${post.author.user_id}" data-username="${post.author.username}" data-name="${post.author.name}">
+                                ${post.author.name} (@${post.author.username})
+                            </div>
+                            <div class="post-date">${formattedDate}</div>
+                        </div>
+                        <div class="post-content">${post.content}</div>
+                        <div class="post-actions">
+                            <div class="post-action like-button ${likeActiveClass}" data-post-id="${post.post_id}">
+                                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                    <path d="m8 2.748-.717-.737C5.6.281 2.514.878 1.4 3.053c-.523 1.023-.641 2.5.314 4.385.92 1.815 2.834 3.989 6.286 6.357 3.452-2.368 5.365-4.542 6.286-6.357.955-1.886.838-3.362.314-4.385C13.486.878 10.4.28 8.717 2.01L8 2.748zM8 15C-7.333 4.868 3.279-3.04 7.824 1.143c.06.055.119.112.176.171a3.12 3.12 0 0 1 .176-.17C12.72-3.042 23.333 4.867 8 15z"/>
+                                </svg>
+                                <span class="like-count">${post.likes_count || 0}</span>
+                            </div>
+                            <div class="post-action comment-button" data-post-id="${post.post_id}">
+                                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                    <path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.414A2 2 0 0 0 3 11.586l-2 2V2a1 1 0 0 1 1-1h12zM2 0a2 2 0 0 0-2 2v12.793a.5.5 0 0 0 .854.353l2.853-2.853A1 1 0 0 1 4.414 12H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2z"/>
+                                    <path d="M3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5zM3 6a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 6zm0 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5z"/>
+                                </svg>
+                                <span>Comment</span>
+                            </div>
+                        </div>
+                        <div class="comments-section" style="display: none;">
+                            <div class="comments-container">
+                                ${post.comments && post.comments.length > 0 ? 
+                                    post.comments.map(comment => `
+                                        <div class="comment">
+                                            <span class="comment-author">${comment.author.username}</span>
+                                            <span class="comment-content">${comment.content}</span>
+                                        </div>
+                                    `).join('') : 
+                                    '<div class="no-comments">No comments yet.</div>'}
+                            </div>
+                            <div class="comment-form">
+                                <input type="text" class="comment-input" placeholder="Add a comment...">
+                                <button class="submit-comment">Post</button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    postsContainer.appendChild(postElement);
+                });
+                
+                // Add event listeners after creating all posts
+                setupPostInteractions();
+            }
+            
+            function setupPostInteractions() {
+                // Like button functionality
+                document.querySelectorAll('.like-button').forEach(button => {
+                    button.addEventListener('click', function() {
+                        const postId = this.dataset.postId;
+                        likePost(postId, this);
+                    });
+                });
+                
+                // Comment button functionality
+                document.querySelectorAll('.comment-button').forEach(button => {
+                    button.addEventListener('click', function() {
+                        const postId = this.dataset.postId;
+                        const postElement = this.closest('.post-card');
+                        const commentsSection = postElement.querySelector('.comments-section');
+                        
+                        // Toggle comments section
+                        if (commentsSection.style.display === 'none') {
+                            commentsSection.style.display = 'block';
+                        } else {
+                            commentsSection.style.display = 'none';
+                        }
+                    });
+                });
+                
+                // Submit comment functionality
+                document.querySelectorAll('.submit-comment').forEach(button => {
+                    button.addEventListener('click', function() {
+                        const postElement = this.closest('.post-card');
+                        const postId = postElement.dataset.postId;
+                        const commentInput = postElement.querySelector('.comment-input');
+                        const commentsContainer = postElement.querySelector('.comments-container');
+                        
+                        if (commentInput.value.trim()) {
+                            // Clear "no comments" message if it exists
+                            if (commentsContainer.querySelector('.no-comments')) {
+                                commentsContainer.innerHTML = '';
+                            }
+                            
+                            addComment(postId, commentInput.value.trim(), commentsContainer)
+                                .then(success => {
+                                    if (success) {
+                                        commentInput.value = '';
+                                    }
+                                });
+                        }
+                    });
+                    
+                    // Also add enter key press functionality
+                    const commentInput = button.previousElementSibling;
+                    commentInput.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter' && this.value.trim()) {
+                            const postElement = this.closest('.post-card');
+                            const postId = postElement.dataset.postId;
+                            const commentsContainer = postElement.querySelector('.comments-container');
+                            
+                            // Clear "no comments" message if it exists
+                            if (commentsContainer.querySelector('.no-comments')) {
+                                commentsContainer.commentsContainer.innerHTML = '';
+                            }
+                            
+                            addComment(postId, this.value.trim(), commentsContainer)
+                                .then(success => {
+                                    if (success) {
+                                        this.value = '';
+                                    }
+                                });
+                        }
+                    });
+                });
+                
+                // Author name click to view profile
+                document.querySelectorAll('.post-author').forEach(author => {
+                    author.addEventListener('click', function() {
+                        const userId = this.dataset.userId;
+                        const username = this.dataset.username;
+                        const name = this.dataset.name;
+                        
+                        showUserProfile(userId, username, name);
+                    });
+                });
+            }
+            
+            // Fetch posts when page loads
+            fetchDiscoverPosts();
+        });
+    </script>
+</body>
+</html>

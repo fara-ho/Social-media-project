@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Followers - PinkSpace</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">PinkSpace ✨</div>
+            <nav>
+                <a href="/">Home</a>
+                <a href="/posts/discover">Discover</a>
+                <a href="/posts/create">Create Post</a>
+                <a href="/posts/user">My Posts</a>
+            </nav>
+        </div>
+    </header>
+
+    <div class="container">
+        <a href="/users/profile" class="back-link">← Back to Profile</a>
+        
+        <h1>Connections</h1>
+        
+        <div class="tab-container">
+            <button class="tab active" id="followers-tab">Followers</button>
+            <button class="tab" id="following-tab">Following</button>
+        </div>
+        
+        <div id="followers-container">
+            <div class="loading">Loading followers...</div>
+        </div>
+        
+        <div id="following-container" style="display: none;">
+            <div class="loading">Loading following...</div>
+        </div>
+    </div>
+    
+    <!-- User Profile Modal -->
+    <div id="userProfileModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <div class="profile-header">
+                <h2 id="profile-name">User Name</h2>
+                <p id="profile-username">@username</p>
+            </div>
+            
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value" id="posts-count">0</div>
+                    <div class="stat-label">Posts</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="followers-count">0</div>
+                    <div class="stat-label">Followers</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="following-count">0</div>
+                    <div class="stat-label">Following</div>
+                </div>
+            </div>
+            
+            <div id="follow-button-container">
+                <button id="follow-toggle-btn" class="follow-btn">Follow</button>
+            </div>
+            
+            <h3>Recent Posts</h3>
+            <div id="profile-posts-container"></div>
+        </div>
+    </div>
+
+    <script>
+        // Get DOM elements
+        const followersTab = document.getElementById('followers-tab');
+        const followingTab = document.getElementById('following-tab');
+        const followersContainer = document.getElementById('followers-container');
+        const followingContainer = document.getElementById('following-container');
+        const userProfileModal = document.getElementById('userProfileModal');
+        const closeModalBtn = document.querySelector('.close');
+        const followToggleBtn = document.getElementById('follow-toggle-btn');
+        
+        // Access token from local storage - fixed to match the profile page
+        const token = localStorage.getItem('access_token');
+        
+        // Check authentication
+        if (!token) {
+            window.location.href = '/auth/login';
+        }
+        
+        // Tab switching
+        followersTab.addEventListener('click', () => {
+            followersTab.classList.add('active');
+            followingTab.classList.remove('active');
+            followersContainer.style.display = 'block';
+            followingContainer.style.display = 'none';
+        });
+        
+        followingTab.addEventListener('click', () => {
+            followingTab.classList.add('active');
+            followersTab.classList.remove('active');
+            followingContainer.style.display = 'block';
+            followersContainer.style.display = 'none';
+            
+            loadFollowingUsers();
+        });
+        
+        // Close modal
+        closeModalBtn.addEventListener('click', () => {
+            userProfileModal.style.display = 'none';
+        });
+        
+        // Close modal when clicking outside
+        window.addEventListener('click', (event) => {
+            if (event.target === userProfileModal) {
+                userProfileModal.style.display = 'none';
+            }
+        });
+        
+        // Load followers
+        async function loadFollowers() {
+            try {
+                const response = await fetch('/users/api/followers', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch followers');
+                }
+                
+                const data = await response.json();
+                
+                if (data.followers.length === 0) {
+                    followersContainer.innerHTML = `
+                        <div class="empty-state">
+                            <p>You don't have any followers yet.</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                let html = '';
+                data.followers.forEach(follower => {
+                    html += `
+                        <div class="user-card">
+                            <div class="user-avatar">${follower.username.charAt(0).toUpperCase()}</div>
+                            <div class="user-info">
+                                <div class="username">@${follower.username}</div>
+                                <div class="name">${follower.name}</div>
+                            </div>
+                            <button class="follow-btn view-profile-btn" data-userid="${follower.user_id}" 
+                                data-username="${follower.username}" data-name="${follower.name}">View Profile</button>
+                        </div>
+                    `;
+                });
+                
+                followersContainer.innerHTML = html;
+                
+                // Add event listeners to view profile buttons
+                document.querySelectorAll('.view-profile-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const userId = btn.getAttribute('data-userid');
+                        const username = btn.getAttribute('data-username');
+                        const name = btn.getAttribute('data-name');
+                        showUserProfile(userId, username, name);
+                    });
+                });
+                
+            } catch (error) {
+                console.error('Error loading followers:', error);
+                followersContainer.innerHTML = `
+                    <div class="empty-state">
+                        <p>Error loading followers. Please try again later.</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Load following users
+        async function loadFollowingUsers() {
+            try {
+                const response = await fetch('/users/api/following', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch following users');
+                }
+                
+                const data = await response.json();
+                console.log("Following data:", data);
+                
+                if (data.following.length === 0) {
+                    followingContainer.innerHTML = `
+                        <div class="empty-state">
+                            <p>You are not following anyone yet.</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                let html = '';
+                data.following.forEach(user => {
+                    html += `
+                        <div class="user-card">
+                            <div class="user-avatar">${user.username.charAt(0).toUpperCase()}</div>
+                            <div class="user-info">
+                                <div class="username">@${user.username}</div>
+                                <div class="name">${user.name}</div>
+                            </div>
+                            <button class="unfollow-btn" data-userid="${user.user_id}">Unfollow</button>
+                            <button class="follow-btn view-profile-btn" data-userid="${user.user_id}" 
+                                data-username="${user.username}" data-name="${user.name}">View Profile</button>
+                        </div>
+                    `;
+                });
+                
+                followingContainer.innerHTML = html;
+                
+                // Add event listeners to unfollow buttons
+                document.querySelectorAll('#following-container .unfollow-btn').forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        const userId = btn.getAttribute('data-userid');
+                        await toggleFollow(userId);
+                        loadFollowingUsers(); // Reload the list
+                    });
+                });
+                
+                // Add event listeners to view profile buttons
+                document.querySelectorAll('#following-container .view-profile-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const userId = btn.getAttribute('data-userid');
+                        const username = btn.getAttribute('data-username');
+                        const name = btn.getAttribute('data-name');
+                        showUserProfile(userId, username, name);
+                    });
+                });
+                
+            } catch (error) {
+                console.error('Error loading following users:', error);
+                followingContainer.innerHTML = `
+                    <div class="empty-state">
+                        <p>Error loading following users. Please try again later.</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Show user profile
+        async function showUserProfile(userId, username, name) {
+            document.getElementById('profile-username').textContent = '@' + username;
+            document.getElementById('profile-name').textContent = name;
+            
+            // Set loading state
+            document.getElementById('posts-count').textContent = '...';
+            document.getElementById('followers-count').textContent = '...';
+            document.getElementById('following-count').textContent = '...';
+            
+            // Clear previous posts
+            document.getElementById('profile-posts-container').innerHTML = '<div class="loading">Loading user data...</div>';
+            
+            // Show the modal
+            userProfileModal.style.display = 'block';
+            
+            // Check follow status
+            const followStatus = await checkFollowStatus(userId);
+            updateFollowButton(userId, followStatus);
+            
+            // Fetch user profile data
+            const profileData = await fetchUserProfile(userId);
+            if (profileData) {
+                // Update profile stats
+                document.getElementById('posts-count').textContent = profileData.posts_count;
+                document.getElementById('followers-count').textContent = profileData.followers_count;
+                document.getElementById('following-count').textContent = profileData.following_count;
+                
+                // Load user's posts
+                loadUserPosts(userId);
+            }
+        }
+        
+        // Check if current user is following a user
+        async function checkFollowStatus(userId) {
+            try {
+                const response = await fetch(`/users/${userId}/follow/status`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to check follow status');
+                }
+                
+                const data = await response.json();
+                return data.is_following;
+                
+            } catch (error) {
+                console.error('Error checking follow status:', error);
+                return false;
+            }
+        }
+        
+        // Update follow button based on status
+        function updateFollowButton(userId, isFollowing) {
+            const followToggleBtn = document.getElementById('follow-toggle-btn');
+            
+            if (isFollowing) {
+                followToggleBtn.textContent = 'Unfollow';
+                followToggleBtn.className = 'unfollow-btn';
+            } else {
+                followToggleBtn.textContent = 'Follow';
+                followToggleBtn.className = 'follow-btn';
+            }
+            
+            // Update click event
+            followToggleBtn.onclick = async () => {
+                await toggleFollow(userId);
+                const newStatus = await checkFollowStatus(userId);
+                updateFollowButton(userId, newStatus);
+                
+                // Update followers count
+                const profileData = await fetchUserProfile(userId);
+                if (profileData) {
+                    document.getElementById('followers-count').textContent = profileData.followers_count;
+                }
+            };
+        }
+        
+        // Toggle follow/unfollow
+        async function toggleFollow(userId) {
+            try {
+                const response = await fetch(`/users/${userId}/follow`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                return response.ok;
+                
+            } catch (error) {
+                console.error('Error toggling follow:', error);
+                return false;
+            }
+        }
+        
+        // Fetch user profile data
+        async function fetchUserProfile(userId) {
+            try {
+                const response = await fetch(`/users/${userId}/profile`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch user profile');
+                }
+                
+                return await response.json();
+                
+            } catch (error) {
+                console.error('Error fetching user profile:', error);
+                return null;
+            }
+        }
+        
+        // Load user's posts
+        async function loadUserPosts(userId) {
+            try {
+                const response = await fetch(`/users/${userId}/posts`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch user posts');
+                }
+                
+                const data = await response.json();
+                const postsContainer = document.getElementById('profile-posts-container');
+                
+                if (data.posts.length === 0) {
+                    postsContainer.innerHTML = '<div class="empty-state">This user has no posts yet.</div>';
+                    return;
+                }
+                
+                let html = '';
+                data.posts.forEach(post => {
+                    const date = new Date(post.created_at);
+                    const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+                    
+                    html += `
+                        <div class="post-card">
+                            <div class="post-content">${post.content}</div>
+                            <div class="post-meta">
+                                <span>Posted on ${formattedDate}</span>
+                                <span>❤️ ${post.likes_count} likes</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                postsContainer.innerHTML = html;
+                
+            } catch (error) {
+                console.error('Error loading user posts:', error);
+                document.getElementById('profile-posts-container').innerHTML = 
+                    '<div class="empty-state">Error loading posts. Please try again later.</div>';
+            }
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFollowers();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Register | PinkSpace</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h2 class="headline">💖 Register for PinkSpace</h2>
+        
+        <form id="registerForm">
+            <label for="name" class="label-text">Full Name</label><br>
+            <input type="text" id="name" name="name" required class="input-field"><br><br>
+
+            <label for="username" class="label-text">Username</label><br>
+            <input type="text" id="username" name="username" required class="input-field"><br><br>
+
+            <label for="email" class="label-text">Email</label><br>
+            <input type="email" id="email" name="email" required class="input-field"><br><br>
+
+            <label for="password" class="label-text">Password</label><br>
+            <input type="password" id="password" name="password" required class="input-field"><br><br>
+
+            <label for="confirm_password" class="label-text">Confirm Password</label><br>
+            <input type="password" id="confirm_password" name="confirm_password" required class="input-field"><br><br>
+
+            <button type="submit" class="button-login">✨ Register</button>
+        </form>
+
+        <!-- Error message will appear here if registration fails -->
+        <p>
+            <div id="error-message" class="error-message" style="display: none;"></div>
+        </p>
+    </div>
+
+    <script>
+        document.getElementById('registerForm').addEventListener('submit', function(event) {
+            event.preventDefault();  // Prevent default form submission
+
+            const name = document.getElementById('name').value;
+            const username = document.getElementById('username').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirm_password').value;
+
+            // Check if passwords match
+            if (password !== confirmPassword) {
+                document.getElementById('error-message').textContent = "Passwords do not match!";
+                document.getElementById('error-message').style.display = 'block';
+                return;
+            }
+
+            // Send registration request to the backend
+            fetch('/auth/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'  // Set the header to indicate JSON data
+                },
+                body: JSON.stringify({
+                    name: name,  // Include name field in the body
+                    username: username,
+                    email: email,
+                    password: password
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    // Display error message returned from backend
+                    document.getElementById('error-message').textContent = data.error;
+                    document.getElementById('error-message').style.display = 'block';
+                } else {
+                    // Success message or redirect to another page
+                    window.location.href = '/auth/login';  // Redirect to login page on success
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('error-message').textContent = "An error occurred. Please try again.";
+                document.getElementById('error-message').style.display = 'block';
+            });
+        });
+    </script>
+</body>
+</html>

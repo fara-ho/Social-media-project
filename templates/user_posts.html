@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Posts</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>My Posts</h1>
+        </header>
+        
+        <div class="posts-nav">
+            <a href="/posts/discover" class="button">Discover</a>
+            <a href="/posts/create" class="button">Create Post</a>
+            <a href="/users/profile" class="button">Back to Profile</a>
+        </div>
+        
+        <div id="posts-container" class="posts-container">
+            <div class="loading">Loading your posts...</div>
+        </div>
+        
+        <div id="error-message" class="error-message"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const postsContainer = document.getElementById('posts-container');
+            const errorMessage = document.getElementById('error-message');
+            
+            async function fetchUserPosts() {
+                try {
+                    const response = await fetch('/posts/api/user', {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                        }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        displayPosts(data.posts);
+                    } else {
+                        
+                        errorMessage.textContent = data.error || 'Failed to fetch posts';
+                        postsContainer.innerHTML = '';
+                    }
+                } catch (error) {
+                    console.error('Error fetching posts:', error);
+                    errorMessage.textContent = 'An error occurred. Please try again.';
+                    postsContainer.innerHTML = '';
+                }
+            }
+            
+            async function likePost(postId, likeButton) {
+                // Disable the button temporarily to prevent multiple rapid clicks
+                likeButton.classList.add('processing');
+                
+                try {
+                    const response = await fetch(`/posts/${postId}/like`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                        }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        // Toggle like status visually
+                        const likeCountElement = likeButton.querySelector('.like-count');
+                        
+                        if (data.liked) {
+                            likeButton.classList.add('like-active');
+                            likeCountElement.textContent = parseInt(likeCountElement.textContent) + 1;
+                        } else {
+                            likeButton.classList.remove('like-active');
+                            likeCountElement.textContent = parseInt(likeCountElement.textContent) - 1;
+                        }
+                    } else {
+                        console.error('Error liking post:', data.error);
+                    }
+                } catch (error) {
+                    console.error('Error liking post:', error);
+                } finally {
+                    // Re-enable the button after the request completes
+                    setTimeout(() => {
+                        likeButton.classList.remove('processing');
+                    }, 500); // Half-second delay to prevent rapid re-clicking
+                }
+            }
+            
+            async function addComment(postId, content, commentsContainer) {
+                try {
+                    const response = await fetch(`/posts/${postId}/comments`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ content })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        // Add the new comment to the UI
+                        const commentElement = document.createElement('div');
+                        commentElement.className = 'comment';
+                        
+                        const comment = data.comment;
+                        commentElement.innerHTML = `
+                            <span class="comment-author">${comment.author.username}</span>
+                            <span class="comment-content">${comment.content}</span>
+                        `;
+                        
+                        commentsContainer.appendChild(commentElement);
+                        return true;
+                    } else {
+                        console.error('Error adding comment:', data.error);
+                        return false;
+                    }
+                } catch (error) {
+                    console.error('Error adding comment:', error);
+                    return false;
+                }
+            }
+            
+            function displayPosts(posts) {
+                postsContainer.innerHTML = '';
+                
+                if (posts.length === 0) {
+                    postsContainer.innerHTML = '<div class="no-posts">You haven\'t created any posts yet.</div>';
+                    return;
+                }
+                
+                posts.forEach(post => {
+                    const postDate = new Date(post.created_at);
+                    const formattedDate = postDate.toLocaleDateString() + ' ' + postDate.toLocaleTimeString();
+                    
+                    const postElement = document.createElement('div');
+                    postElement.className = 'post-card';
+                    postElement.dataset.postId = post.post_id;
+                    
+                    // Check if user has liked this post
+                    const likeActiveClass = post.user_liked ? 'like-active' : '';
+                    
+                    postElement.innerHTML = `
+                        <div class="post-header">
+                            <div class="post-date">${formattedDate}</div>
+                        </div>
+                        <div class="post-content">${post.content}</div>
+                        <div class="post-actions">
+                            <div class="post-action like-button ${likeActiveClass}" data-post-id="${post.post_id}">
+                                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                    <path d="m8 2.748-.717-.737C5.6.281 2.514.878 1.4 3.053c-.523 1.023-.641 2.5.314 4.385.92 1.815 2.834 3.989 6.286 6.357 3.452-2.368 5.365-4.542 6.286-6.357.955-1.886.838-3.362.314-4.385C13.486.878 10.4.28 8.717 2.01L8 2.748zM8 15C-7.333 4.868 3.279-3.04 7.824 1.143c.06.055.119.112.176.171a3.12 3.12 0 0 1 .176-.17C12.72-3.042 23.333 4.867 8 15z"/>
+                                </svg>
+                                <span class="like-count">${post.likes_count || 0}</span>
+                            </div>
+                            <div class="post-action comment-button" data-post-id="${post.post_id}">
+                                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                    <path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.414A2 2 0 0 0 3 11.586l-2 2V2a1 1 0 0 1 1-1h12zM2 0a2 2 0 0 0-2 2v12.793a.5.5 0 0 0 .854.353l2.853-2.853A1 1 0 0 1 4.414 12H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2z"/>
+                                    <path d="M3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5zM3 6a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 6zm0 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5z"/>
+                                </svg>
+                                <span>Comment</span>
+                            </div>
+                        </div>
+                        <div class="comments-section" style="display: none;">
+                            <div class="comments-container">
+                                ${post.comments && post.comments.length > 0 ? 
+                                    post.comments.map(comment => `
+                                        <div class="comment">
+                                            <span class="comment-author">${comment.author.username}</span>
+                                            <span class="comment-content">${comment.content}</span>
+                                        </div>
+                                    `).join('') : 
+                                    '<div class="no-comments">No comments yet.</div>'}
+                            </div>
+                            <div class="comment-form">
+                                <input type="text" class="comment-input" placeholder="Add a comment...">
+                                <button class="submit-comment">Post</button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    postsContainer.appendChild(postElement);
+                });
+                
+                // Add event listeners after creating all posts
+                setupPostInteractions();
+            }
+            
+            function setupPostInteractions() {
+                // Like button functionality
+                document.querySelectorAll('.like-button').forEach(button => {
+                    button.addEventListener('click', function() {
+                        const postId = this.dataset.postId;
+                        likePost(postId, this);
+                    });
+                });
+                
+                // Comment button functionality
+                document.querySelectorAll('.comment-button').forEach(button => {
+                    button.addEventListener('click', function() {
+                        const postId = this.dataset.postId;
+                        const postElement = this.closest('.post-card');
+                        const commentsSection = postElement.querySelector('.comments-section');
+                        
+                        // Toggle comments section
+                        if (commentsSection.style.display === 'none') {
+                            commentsSection.style.display = 'block';
+                        } else {
+                            commentsSection.style.display = 'none';
+                        }
+                    });
+                });
+                
+                // Submit comment functionality
+                document.querySelectorAll('.submit-comment').forEach(button => {
+                    button.addEventListener('click', function() {
+                        const postElement = this.closest('.post-card');
+                        const postId = postElement.dataset.postId;
+                        const commentInput = postElement.querySelector('.comment-input');
+                        const commentsContainer = postElement.querySelector('.comments-container');
+                        
+                        if (commentInput.value.trim()) {
+                            // Clear "no comments" message if it exists
+                            if (commentsContainer.querySelector('.no-comments')) {
+                                commentsContainer.innerHTML = '';
+                            }
+                            
+                            addComment(postId, commentInput.value.trim(), commentsContainer)
+                                .then(success => {
+                                    if (success) {
+                                        commentInput.value = '';
+                                    }
+                                });
+                        }
+                    });
+                    
+                    // Also add enter key press functionality
+                    const commentInput = button.previousElementSibling;
+                    commentInput.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter' && this.value.trim()) {
+                            const postElement = this.closest('.post-card');
+                            const postId = postElement.dataset.postId;
+                            const commentsContainer = postElement.querySelector('.comments-container');
+                            
+                            // Clear "no comments" message if it exists
+                            if (commentsContainer.querySelector('.no-comments')) {
+                                commentsContainer.innerHTML = '';
+                            }
+                            
+                            addComment(postId, this.value.trim(), commentsContainer)
+                                .then(success => {
+                                    if (success) {
+                                        this.value = '';
+                                    }
+                                });
+                        }
+                    });
+                });
+            }
+            
+            // Fetch posts when page loads
+            fetchUserPosts();
+        });
+    </script>
+</body>
+</html>

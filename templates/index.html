@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to PinkSpace!</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">PinkSpace <span class="version-badge">v1.0</span></div>
+            <p class="tagline">The cutest place to connect, share, and vibe ✨</p>
+        </div>
+    </header>
+
+    <div class="container content">
+        <div class="card">
+            <div class="card-header">Welcome to PinkSpace 🌸</div>
+            <div class="card-body">
+                <p>
+                    PinkSpace is your cozy little corner of the internet where friendships bloom and stories sparkle! 
+                    Share photos, post updates, chat with friends, and enjoy a vibrant, supportive community.
+                </p>
+                <p>
+                    Our app is built with love for our university databases project 💻❤️. Explore the features, or jump right in and start your journey!
+                </p>
+
+                <div style="margin-top: 2rem;">
+                    <a href="/auth/login" class="button-login">✨ Login to your account</a>
+                    <a href="/auth/register" class="button-register">✨ Create an account</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="container">
+            &copy; 2025 PinkSpace. Made with 💖 by WillowEve
+        </div>
+    </footer>
+</body>
+</html>

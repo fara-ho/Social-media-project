@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Profile | PinkSpace</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">PinkSpace ✨</div>
+            <nav>
+                <a href="/">Home</a>
+            </nav>
+        </div>
+    </header>
+
+    <div class="container">
+        <h2 class="headline">💖 Your Profile</h2>
+        
+        <!-- User Profile Information -->
+        <div id="profile-info">
+            <p><strong>Username:</strong> <span id="username">Loading...</span></p>
+            <p><strong>Name:</strong> <span id="name">Loading...</span></p>
+            <p><strong>Email:</strong> <span id="email">Loading...</span></p>
+            <p><strong>Posts:</strong> <span id="posts-count">Loading...</span></p>
+            <p><strong>Followers:</strong> <span id="followers-count">Loading...</span></p>
+            <p><strong>Following:</strong> <span id="following-count">Loading...</span></p>
+        </div>
+        
+        <!-- Primary Action Buttons -->
+        <div class="button-group">
+            <button id="make-post-btn" class="button-pink button-highlight">✨ Create New Post</button>
+            <button id="discover-posts-btn" class="button-pink">🔍 Discover Posts</button>
+            <button id="edit-profile-btn" class="button-pink button-highlight">✏️ Edit Profile</button>
+        </div>
+        
+        <!-- Edit Profile Form -->
+        <div id="edit-profile-form" class="edit-profile-form" style="display: none;">
+            <h3>Edit Your Profile</h3>
+            <form id="profile-update-form">
+                <label for="edit-username">Username</label>
+                <input type="text" id="edit-username" name="username">
+                
+                <label for="edit-name">Name</label>
+                <input type="text" id="edit-name" name="name">
+                
+                <label for="edit-email">Email</label>
+                <input type="email" id="edit-email" name="email">
+                
+                <button type="submit" class="button-pink">Save Changes</button>
+                <button type="button" id="cancel-edit" class="button">Cancel</button>
+            </form>
+        </div>
+        
+        <!-- Secondary Action Buttons -->
+        <div id="profile-actions">
+            <button type="button" id="view-posts" class="button-pink">View Your Posts</button>
+            <button type="button" id="view-followers" class="button-pink button-highlight">View Followers/Following</button>
+        </div>
+        
+        <!-- Error/Success message area -->
+        <div id="message-container">
+            <div id="error-message" class="error-message" style="display: none;"></div>
+            <div id="success-message" class="success-message" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Profile page loaded');
+            
+            // Get token from localStorage - using the same key name in both files
+            const accessToken = localStorage.getItem('access_token');
+            console.log('Token from localStorage:', accessToken ? 'Token found' : 'No token found');
+            
+            // Check if the token exists
+            if (!accessToken) {
+                document.getElementById('error-message').textContent = 'Not logged in. Please login first.';
+                document.getElementById('error-message').style.display = 'block';
+                setTimeout(() => { window.location.href = '/auth/login'; }, 2000);
+                return;
+            }
+            
+            // Function to load profile data
+            function loadProfileData() {
+                fetch('/users/api/profile', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': 'Bearer ' + accessToken,
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => {
+                    console.log('Profile fetch status:', response.status);
+                    if (!response.ok) {
+                        throw new Error('Failed with status: ' + response.status);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Profile data received:', data);
+                    
+                    // Update the profile information
+                    document.getElementById('username').textContent = data.username;
+                    document.getElementById('name').textContent = data.name;
+                    document.getElementById('email').textContent = data.email;
+                    document.getElementById('posts-count').textContent = data.posts_count;
+                    document.getElementById('followers-count').textContent = data.followers_count;
+                    document.getElementById('following-count').textContent = data.following_count;
+                    
+                    // Also populate the edit form
+                    document.getElementById('edit-username').value = data.username;
+                    document.getElementById('edit-name').value = data.name;
+                    document.getElementById('edit-email').value = data.email;
+                })
+                .catch(error => {
+                    console.error('Error fetching profile:', error);
+                    document.getElementById('error-message').textContent = 'Error loading profile: ' + error.message;
+                    document.getElementById('error-message').style.display = 'block';
+                });
+            }
+            
+            // Initial load of profile data
+            loadProfileData();
+            
+            // Make Post button
+            document.getElementById('make-post-btn').addEventListener('click', function() {
+                window.location.href = '/posts/create';
+            });
+            
+            // Discover Posts button
+            document.getElementById('discover-posts-btn').addEventListener('click', function() {
+                window.location.href = '/posts/discover';
+            });
+
+            // Edit profile button
+            document.getElementById('edit-profile-btn').addEventListener('click', function() {
+                document.getElementById('edit-profile-form').style.display = 'block';
+                this.style.display = 'none';
+            });
+            
+            // Cancel edit button
+            document.getElementById('cancel-edit').addEventListener('click', function() {
+                document.getElementById('edit-profile-form').style.display = 'none';
+                document.getElementById('edit-profile-btn').style.display = 'block';
+                // Reset form values
+                loadProfileData();
+            });
+            
+            // Profile update form submission
+            document.getElementById('profile-update-form').addEventListener('submit', function(event) {
+                event.preventDefault();
+                
+                const username = document.getElementById('edit-username').value;
+                const name = document.getElementById('edit-name').value;
+                const email = document.getElementById('edit-email').value;
+                
+                // Clear previous messages
+                document.getElementById('error-message').style.display = 'none';
+                document.getElementById('success-message').style.display = 'none';
+                
+                fetch('/users/api/profile/update', {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': 'Bearer ' + accessToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        name: name,
+                        email: email
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        // Show error message
+                        document.getElementById('error-message').textContent = data.error;
+                        document.getElementById('error-message').style.display = 'block';
+                        // Hide error message after 2000ms (2 seconds)
+                        setTimeout(() => {
+                            document.getElementById('error-message').style.display = 'none';
+                        }, 2000);
+                    } else {
+                        // Show success message
+                        document.getElementById('success-message').textContent = 'Profile updated successfully!';
+                        document.getElementById('success-message').style.display = 'block';
+                        // Hide success message after 2000ms (2 seconds)
+                        setTimeout(() => {
+                            document.getElementById('success-message').style.display = 'none';
+                        }, 2000);
+                        
+                        // Hide edit form
+                        document.getElementById('edit-profile-form').style.display = 'none';
+                        document.getElementById('edit-profile-btn').style.display = 'block';
+                        
+                        // Reload profile data
+                        loadProfileData();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating profile:', error);
+                    document.getElementById('error-message').textContent = 'Error updating profile: ' + error.message;
+                    document.getElementById('error-message').style.display = 'block';
+                    // Hide error message after 2000ms (2 seconds)
+                    setTimeout(() => {
+                        document.getElementById('error-message').style.display = 'none';
+                    }, 2000);
+                });
+            });
+            
+            // Navigation buttons
+            document.getElementById('view-posts').addEventListener('click', function() {
+                window.location.href = '/posts/user';
+            });
+            
+            document.getElementById('view-followers').addEventListener('click', function() {
+                window.location.href = '/users/followers';
+            });
+            
+        });
+    </script>
+</body>
+</html>

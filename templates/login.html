@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login | PinkSpace</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h2>💖 Login to PinkSpace</h2>
+        <form id="loginForm">
+            <label for="username">Username</label><br>
+            <input type="text" id="username" name="username" required><br><br>
+
+            <label for="password">Password</label><br>
+            <input type="password" id="password" name="password" required><br><br>
+
+            <button type="submit" class="button-login">✨ Login to your account</button>
+        </form>
+        <!-- Error message will appear here if login fails -->
+        <p>
+         <div id="error-message" class="error-message" style="display: none;"></div>
+        </p>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorMsg = document.getElementById('error-message');
+            
+            console.log('Attempting login for:', username);
+            
+            fetch('/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    username: username,
+                    password: password
+                })
+            })
+            .then(response => {
+                console.log('Login response status:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('Login response data:', data);
+                
+                if (data.access_token) {
+                    // Store token with explicit console logs
+                    localStorage.setItem('access_token', data.access_token);
+                    console.log('Token stored in localStorage:', data.access_token);
+                    
+                    // Check immediately that we can retrieve it
+                    const storedToken = localStorage.getItem('access_token');
+                    console.log('Retrieved token from localStorage:', storedToken);
+                    
+                    // Use the token immediately for redirection
+                    window.location.href = '/users/profile';
+                } else {
+                    errorMsg.textContent = data.error || 'Login failed';
+                    errorMsg.style.display = 'block';
+                }
+            })
+            .catch(error => {
+                console.error('Login error:', error);
+                errorMsg.textContent = 'Login failed. Please try again.';
+                errorMsg.style.display = 'block';
+            });
+        });
+
+    </script>
+</body>
+</html>
